@@ -9,9 +9,11 @@
   ],
   "scripts": {
     "setup": "node scripts/setup.mjs",
-    
     "dev": "concurrently -n gateway,auth,ticket,frontend \"npm run dev --workspace=api-gateway\" \"npm run dev --workspace=auth-service\" \"npm run dev --workspace=ticket-service\" \"npm run dev --workspace=frontend\"",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
   }
 }
