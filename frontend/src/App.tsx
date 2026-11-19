@@ -6,7 +6,7 @@ import {
 } from "react-router-dom";
 
 import { useAuth } from "./context/useAuth.ts";
-import ProtectedRoute from "./components/ProtectedRoute.tsx";
+import ProtectedRoute from "./components/ProtectedRoutes.tsx";
 
 
 import Login from "./pages/Login.tsx";

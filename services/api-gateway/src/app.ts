@@ -3,12 +3,23 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { createProxyMiddleware } from "http-proxy-middleware";
+import { register, metricsMiddleware } from "./utils/metrics.ts";
 
 import { services } from "./config/services.ts";
 import errorMiddleware from "./middleware/error.middleware.ts";
 import { handleProxyError } from "./middleware/proxy-error.middleware.ts";
+import requestIdMiddleware from "./middleware/request-id.middleware.ts";
 
 const app = express();
+
+app.use(requestIdMiddleware);
+
+app.use(metricsMiddleware);
+
+app.get("/metrics", async (_req, res) => {
+  res.setHeader("Content-Type", register.contentType);
+  res.end(await register.metrics());
+});
 
 app.use(helmet());
 

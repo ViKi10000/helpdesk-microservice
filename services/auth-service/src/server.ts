@@ -1,12 +1,24 @@
 
 import "dotenv/config";
+import "./instrumentation.ts";
 import express from "express";
 
 import connectDB from "./config/database.ts";
 import authRoutes from "./routes/auth.routes.ts";
 import internalRoutes from "./routes/internal.routes.ts";
+import requestIdMiddleware from "./middleware/request-id.middleware.ts";
+import { register, metricsMiddleware } from "./utils/metrics.ts";
+
 
 const app = express();
+
+app.use(requestIdMiddleware);
+app.use(metricsMiddleware);
+
+app.get("/metrics", async (_req, res) => {
+  res.setHeader("Content-Type", register.contentType);
+  res.end(await register.metrics());
+});
 
 app.use(express.json());
 

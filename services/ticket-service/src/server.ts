@@ -1,5 +1,6 @@
 
 import "dotenv/config";
+import "./utils/instrumentation.ts";
 import app from "./app.ts";
 import connectDB from "./config/database.ts";
 
