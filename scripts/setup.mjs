@@ -1,8 +1,12 @@
+
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
 const root = process.cwd();
+
+const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_PASSWORD = "Admin@12345";
 
 function ensureEnv(examplePath, envPath) {
   const example = path.join(root, examplePath);
@@ -28,6 +32,7 @@ function getValue(content, key) {
   const line = content.split(/\r?\n/).find((item) =>
     item.startsWith(`${key}=`)
   );
+
   return line ? line.slice(key.length + 1).trim() : "";
 }
 
@@ -83,26 +88,16 @@ const sharedKey =
 
 setValue(envFiles.auth, "INTERNAL_SERVICE_KEY", sharedKey);
 setValue(envFiles.ticket, "INTERNAL_SERVICE_KEY", sharedKey);
+
 console.log("Configured shared internal service key.");
 
-// Generate a local admin password if the example placeholder remains.
-const adminEnv = readEnv(envFiles.auth);
-const currentAdminPassword = getValue(adminEnv, "ADMIN_PASSWORD");
+// Configure fixed local admin credentials.
+setValue(envFiles.auth, "ADMIN_EMAIL", ADMIN_EMAIL);
+setValue(envFiles.auth, "ADMIN_PASSWORD", ADMIN_PASSWORD);
 
-if (
-  !currentAdminPassword ||
-  currentAdminPassword === "replace-with-a-strong-password"
-) {
-  const password = crypto.randomBytes(18).toString("base64url");
-  setValue(envFiles.auth, "ADMIN_PASSWORD", password);
-
-  console.log("\nGenerated local admin credentials:");
-  console.log(`Email: ${getValue(readEnv(envFiles.auth), "ADMIN_EMAIL")}`);
-  console.log(`Password: ${password}`);
-  console.log("Save this password. It will not be printed again.");
-} else {
-  console.log("Existing admin password preserved.");
-}
+console.log("\nAdmin credentials configured:");
+console.log(`Email: ${ADMIN_EMAIL}`);
+console.log(`Password: ${ADMIN_PASSWORD}`);
 
 // Generate matching RSA keys if either key is missing.
 const keysDir = path.join(root, "keys");
