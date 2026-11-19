@@ -1,24 +1,59 @@
 
 import type { ErrorRequestHandler } from "express";
 
-const errorMiddleware: ErrorRequestHandler = (
-  error,
-  _req,
-  res,
-  _next
-) => {
-  console.error("Gateway Error:", error);
+interface AppError extends Error {
+  statusCode?: number;
+  code?: string;
+}
 
+const errorMiddleware: ErrorRequestHandler = (
+  error: AppError,
+  req,
+  res,
+  next
+) => {
   if (res.headersSent) {
-    return;
+    return next(error);
   }
 
-  res.status(500).json({
+  const statusCode =
+    typeof error.statusCode === "number" &&
+    error.statusCode >= 400 &&
+    error.statusCode <= 599
+      ? error.statusCode
+      : 500;
+
+  const isProduction = process.env.NODE_ENV === "production";
+
+  const errorCode =
+    error.code ||
+    (statusCode === 500
+      ? "INTERNAL_SERVER_ERROR"
+      : "REQUEST_ERROR");
+
+  const message =
+    statusCode === 500 && isProduction
+      ? "Something went wrong. Please try again later."
+      : error.message || "Something went wrong";
+
+  console.error({
+    message: "API Gateway Error",
+    error: error.message,
+    code: errorCode,
+    statusCode,
+    method: req.method,
+    path: req.originalUrl,
+    requestId: req.headers["x-request-id"],
+    stack: isProduction ? undefined : error.stack,
+  });
+
+  res.status(statusCode).json({
     success: false,
+    message,
     error: {
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Something went wrong",
+      code: errorCode,
     },
+    requestId: req.headers["x-request-id"] || undefined,
   });
 };
 

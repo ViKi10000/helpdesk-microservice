@@ -18,38 +18,76 @@ import { updateStatusSchema } from "../utils/status.validation.ts";
 import { addCommentSchema } from "../utils/comment.validation.ts";
 import { ticketQuerySchema } from "../utils/ticket-query.validation.ts";
 
+// ---------------------------------------------
+// Service error messages
+// ---------------------------------------------
+
 const serviceErrors: Record<
   string,
   { status: number; message: string }
 > = {
   INVALID_TICKET_ID: {
     status: 400,
-    message: "Invalid ticket ID",
+    message: "The ticket ID is invalid.",
   },
   TICKET_NOT_FOUND: {
     status: 404,
-    message: "Ticket not found",
+    message: "Ticket not found. It may have been deleted.",
   },
   TICKET_ACCESS_DENIED: {
     status: 403,
-    message: "You cannot access this ticket",
+    message: "You don't have permission to access this ticket.",
   },
   USER_NOT_FOUND: {
     status: 404,
-    message: "Assigned user not found",
+    message: "The selected user could not be found.",
   },
   INVALID_ASSIGNEE_ROLE: {
     status: 400,
-    message: "Tickets can only be assigned to admin users",
+    message: "Tickets can only be assigned to admin users.",
   },
   AUTH_SERVICE_UNAVAILABLE: {
     status: 503,
-    message: "Auth Service is currently unavailable",
+    message: "Authentication service is temporarily unavailable. Please try again later.",
   },
   AUTH_SERVICE_CONFIG_MISSING: {
     status: 500,
-    message: "Auth Service configuration is missing",
+    message: "Authentication service configuration is missing.",
   },
+};
+
+// ---------------------------------------------
+// Shared response helpers
+// ---------------------------------------------
+
+const sendValidationError = (
+  res: Response,
+  issues: {
+    path: PropertyKey[];
+    message: string;
+  }[]
+) => {
+  return res.status(400).json({
+    error: {
+      code: "VALIDATION_ERROR",
+      message:
+        issues[0]?.message ??
+        "Please check the information you entered.",
+      details: issues.map((issue) => ({
+        field: issue.path.join("."),
+        message: issue.message,
+      })),
+    },
+  });
+};
+
+const sendUnauthorizedError = (res: Response) => {
+  return res.status(401).json({
+    error: {
+      code: "UNAUTHORIZED",
+      message: "Please log in to continue.",
+    },
+  });
 };
 
 const handleServiceError = (
@@ -74,7 +112,10 @@ const handleServiceError = (
   next(error);
 };
 
+// ---------------------------------------------
 // Create a new ticket
+// ---------------------------------------------
+
 export const createTicketController: RequestHandler = async (
   req,
   res,
@@ -84,25 +125,14 @@ export const createTicketController: RequestHandler = async (
     const validation = createTicketSchema.safeParse(req.body);
 
     if (!validation.success) {
-      res.status(400).json({
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Invalid ticket data",
-          details: validation.error.issues,
-        },
-      });
+      sendValidationError(res, validation.error.issues);
       return;
     }
 
     const userId = req.user?.id;
 
     if (!userId) {
-      res.status(401).json({
-        error: {
-          code: "UNAUTHORIZED",
-          message: "Authentication required",
-        },
-      });
+      sendUnauthorizedError(res);
       return;
     }
 
@@ -113,7 +143,7 @@ export const createTicketController: RequestHandler = async (
 
     res.status(201).json({
       success: true,
-      message: "Ticket created successfully",
+      message: "Your ticket has been created successfully.",
       data: ticket,
     });
   } catch (error) {
@@ -121,7 +151,10 @@ export const createTicketController: RequestHandler = async (
   }
 };
 
+// ---------------------------------------------
 // Get tickets
+// ---------------------------------------------
+
 export const getTicketsController: RequestHandler = async (
   req,
   res,
@@ -131,24 +164,14 @@ export const getTicketsController: RequestHandler = async (
     const user = req.user;
 
     if (!user) {
-      res.status(401).json({
-        error: {
-          code: "UNAUTHORIZED",
-          message: "Authentication required",
-        },
-      });
+      sendUnauthorizedError(res);
       return;
     }
 
     const validation = ticketQuerySchema.safeParse(req.query);
 
     if (!validation.success) {
-      res.status(400).json({
-        error: {
-          code: "VALIDATION_ERROR",
-          message: validation.error.issues[0]?.message,
-        },
-      });
+      sendValidationError(res, validation.error.issues);
       return;
     }
 
@@ -156,7 +179,9 @@ export const getTicketsController: RequestHandler = async (
 
     res.status(200).json({
       success: true,
-      message: "Tickets fetched successfully",
+      message: result.tickets.length
+        ? "Tickets retrieved successfully."
+        : "No tickets found.",
       data: result.tickets,
       pagination: result.pagination,
     });
@@ -165,7 +190,10 @@ export const getTicketsController: RequestHandler = async (
   }
 };
 
+// ---------------------------------------------
 // Get a ticket by ID
+// ---------------------------------------------
+
 export const getTicketByIdController: RequestHandler = async (
   req,
   res,
@@ -175,22 +203,17 @@ export const getTicketByIdController: RequestHandler = async (
     const user = req.user;
 
     if (!user) {
-      res.status(401).json({
-        error: {
-          code: "UNAUTHORIZED",
-          message: "Authentication required",
-        },
-      });
+      sendUnauthorizedError(res);
       return;
     }
 
     const id = req.params.id;
 
-    if (typeof id !== "string") {
+    if (typeof id !== "string" || !id.trim()) {
       res.status(400).json({
         error: {
           code: "INVALID_TICKET_ID",
-          message: "Ticket ID is required",
+          message: "Please provide a valid ticket ID.",
         },
       });
       return;
@@ -200,7 +223,7 @@ export const getTicketByIdController: RequestHandler = async (
 
     res.status(200).json({
       success: true,
-      message: "Ticket fetched successfully",
+      message: "Ticket retrieved successfully.",
       data: ticket,
     });
   } catch (error) {
@@ -208,7 +231,10 @@ export const getTicketByIdController: RequestHandler = async (
   }
 };
 
+// ---------------------------------------------
 // Assign a ticket to an admin
+// ---------------------------------------------
+
 export const assignTicketController: RequestHandler = async (
   req,
   res,
@@ -217,11 +243,11 @@ export const assignTicketController: RequestHandler = async (
   try {
     const id = req.params.id;
 
-    if (typeof id !== "string") {
+    if (typeof id !== "string" || !id.trim()) {
       res.status(400).json({
         error: {
           code: "INVALID_TICKET_ID",
-          message: "Invalid ticket ID",
+          message: "Please provide a valid ticket ID.",
         },
       });
       return;
@@ -230,12 +256,7 @@ export const assignTicketController: RequestHandler = async (
     const validation = assignTicketSchema.safeParse(req.body);
 
     if (!validation.success) {
-      res.status(400).json({
-        error: {
-          code: "VALIDATION_ERROR",
-          message: validation.error.issues[0]?.message,
-        },
-      });
+      sendValidationError(res, validation.error.issues);
       return;
     }
 
@@ -246,7 +267,7 @@ export const assignTicketController: RequestHandler = async (
 
     res.status(200).json({
       success: true,
-      message: "Ticket assigned successfully",
+      message: "Ticket assigned successfully.",
       data: ticket,
     });
   } catch (error) {
@@ -254,7 +275,10 @@ export const assignTicketController: RequestHandler = async (
   }
 };
 
+// ---------------------------------------------
 // Update ticket status
+// ---------------------------------------------
+
 export const updateTicketStatusController: RequestHandler = async (
   req,
   res,
@@ -263,11 +287,11 @@ export const updateTicketStatusController: RequestHandler = async (
   try {
     const id = req.params.id;
 
-    if (typeof id !== "string") {
+    if (typeof id !== "string" || !id.trim()) {
       res.status(400).json({
         error: {
           code: "INVALID_TICKET_ID",
-          message: "Invalid ticket ID",
+          message: "Please provide a valid ticket ID.",
         },
       });
       return;
@@ -276,12 +300,7 @@ export const updateTicketStatusController: RequestHandler = async (
     const validation = updateStatusSchema.safeParse(req.body);
 
     if (!validation.success) {
-      res.status(400).json({
-        error: {
-          code: "VALIDATION_ERROR",
-          message: validation.error.issues[0]?.message,
-        },
-      });
+      sendValidationError(res, validation.error.issues);
       return;
     }
 
@@ -292,7 +311,7 @@ export const updateTicketStatusController: RequestHandler = async (
 
     res.status(200).json({
       success: true,
-      message: "Ticket status updated successfully",
+      message: "Ticket status updated successfully.",
       data: ticket,
     });
   } catch (error) {
@@ -300,7 +319,10 @@ export const updateTicketStatusController: RequestHandler = async (
   }
 };
 
+// ---------------------------------------------
 // Add a comment
+// ---------------------------------------------
+
 export const addCommentController: RequestHandler = async (
   req,
   res,
@@ -310,22 +332,17 @@ export const addCommentController: RequestHandler = async (
     const user = req.user;
 
     if (!user) {
-      res.status(401).json({
-        error: {
-          code: "UNAUTHORIZED",
-          message: "Authentication required",
-        },
-      });
+      sendUnauthorizedError(res);
       return;
     }
 
     const id = req.params.id;
 
-    if (typeof id !== "string") {
+    if (typeof id !== "string" || !id.trim()) {
       res.status(400).json({
         error: {
           code: "INVALID_TICKET_ID",
-          message: "Invalid ticket ID",
+          message: "Please provide a valid ticket ID.",
         },
       });
       return;
@@ -334,12 +351,7 @@ export const addCommentController: RequestHandler = async (
     const validation = addCommentSchema.safeParse(req.body);
 
     if (!validation.success) {
-      res.status(400).json({
-        error: {
-          code: "VALIDATION_ERROR",
-          message: validation.error.issues[0]?.message,
-        },
-      });
+      sendValidationError(res, validation.error.issues);
       return;
     }
 
@@ -351,7 +363,7 @@ export const addCommentController: RequestHandler = async (
 
     res.status(201).json({
       success: true,
-      message: "Comment added successfully",
+      message: "Your comment has been added successfully.",
       data: ticket,
     });
   } catch (error) {
@@ -359,7 +371,10 @@ export const addCommentController: RequestHandler = async (
   }
 };
 
+// ---------------------------------------------
 // Get admins available for ticket assignment
+// ---------------------------------------------
+
 export const getAssignableUsersController: RequestHandler = async (
   _req,
   res,
@@ -370,7 +385,9 @@ export const getAssignableUsersController: RequestHandler = async (
 
     res.status(200).json({
       success: true,
-      message: "Admins fetched successfully",
+      message: admins.length
+        ? "Available admins retrieved successfully."
+        : "No admins are currently available.",
       data: admins,
     });
   } catch (error) {

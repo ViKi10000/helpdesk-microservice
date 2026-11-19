@@ -5,33 +5,40 @@ import User from "../models/user.model.ts";
 import { generateAccessToken } from "../utils/jwt.ts";
 
 export class AuthServiceError extends Error {
-  constructor(
-    message: string,
-    public statusCode: number
-  ) {
+  constructor(message: string, public statusCode: number) {
     super(message);
     this.name = "AuthServiceError";
   }
 }
 
+// ---------------------------------------------
 // Register a new user
+// ---------------------------------------------
+
 export const registerUser = async (
   name: string,
   email: string,
   password: string
 ) => {
   try {
-    const existingUser = await User.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const existingUser = await User.findOne({
+      email: normalizedEmail,
+    });
 
     if (existingUser) {
-      throw new AuthServiceError("Email already registered", 409);
+      throw new AuthServiceError(
+        "This email address is already registered.",
+        409
+      );
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: normalizedEmail,
       password: hashedPassword,
     });
 
@@ -42,28 +49,42 @@ export const registerUser = async (
       role: user.role,
     };
   } catch (error) {
-    // Handle duplicate email in case two registrations happen together
+    // Handle duplicate email if simultaneous registrations occur.
     if (
       error instanceof Error &&
       "code" in error &&
       error.code === 11000
     ) {
-      throw new AuthServiceError("Email already registered", 409);
+      throw new AuthServiceError(
+        "This email address is already registered.",
+        409
+      );
     }
 
     throw error;
   }
 };
 
+// ---------------------------------------------
 // Login an existing user
+// ---------------------------------------------
+
 export const loginUser = async (
   email: string,
   password: string
 ) => {
-  const user = await User.findOne({ email });
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // Explicitly include password if the schema uses select: false.
+  const user = await User.findOne({
+    email: normalizedEmail,
+  });
 
   if (!user) {
-    throw new AuthServiceError("Invalid email or password", 401);
+    throw new AuthServiceError(
+      "Invalid email or password.",
+      401
+    );
   }
 
   const isPasswordValid = await bcrypt.compare(
@@ -72,7 +93,10 @@ export const loginUser = async (
   );
 
   if (!isPasswordValid) {
-    throw new AuthServiceError("Invalid email or password", 401);
+    throw new AuthServiceError(
+      "Invalid email or password.",
+      401
+    );
   }
 
   const accessToken = generateAccessToken({
@@ -91,12 +115,17 @@ export const loginUser = async (
   };
 };
 
+// ---------------------------------------------
 // Get one user by ID (internal)
+// ---------------------------------------------
+
 export const getUserById = async (userId: string) => {
-  const user = await User.findById(userId).select("name email role");
+  const user = await User.findById(userId).select(
+    "name email role"
+  );
 
   if (!user) {
-    throw new AuthServiceError("User not found", 404);
+    throw new AuthServiceError("User not found.", 404);
   }
 
   return {
@@ -107,14 +136,20 @@ export const getUserById = async (userId: string) => {
   };
 };
 
+// ---------------------------------------------
 // Get all regular users (internal)
+// ---------------------------------------------
+
 export const getAllUsers = async () => {
   return User.find({ role: "user" })
     .select("_id name email role")
     .lean();
 };
 
+// ---------------------------------------------
 // Get all admins (internal)
+// ---------------------------------------------
+
 export const getAllAdmins = async () => {
   return User.find({ role: "admin" })
     .select("_id name email role")

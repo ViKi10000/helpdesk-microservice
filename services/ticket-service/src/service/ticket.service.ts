@@ -6,6 +6,10 @@ import type { CreateTicketInput } from "../utils/ticket.validation.ts";
 import type { TicketQuery } from "../utils/ticket-query.validation.ts";
 import { getUserById } from "./auth.service.ts";
 
+// ---------------------------------------------
+// Types
+// ---------------------------------------------
+
 interface CreateTicketParams {
   input: CreateTicketInput;
   userId: string;
@@ -36,6 +40,42 @@ interface TicketFilter {
   priority?: "low" | "medium" | "high";
 }
 
+// ---------------------------------------------
+// Shared validation
+// ---------------------------------------------
+
+const validateTicketId = (ticketId: string): void => {
+  if (!mongoose.isValidObjectId(ticketId)) {
+    throw new Error("INVALID_TICKET_ID");
+  }
+};
+
+const findTicketOrThrow = async (ticketId: string) => {
+  const ticket = await TicketModel.findById(ticketId);
+
+  if (!ticket) {
+    throw new Error("TICKET_NOT_FOUND");
+  }
+
+  return ticket;
+};
+
+const checkTicketAccess = (
+  ticket: { createdBy: unknown },
+  user: { id: string; role: "user" | "admin" }
+): void => {
+  const isAdmin = user.role === "admin";
+  const isOwner = String(ticket.createdBy) === user.id;
+
+  if (!isAdmin && !isOwner) {
+    throw new Error("TICKET_ACCESS_DENIED");
+  }
+};
+
+// ---------------------------------------------
+// Create a new ticket
+// ---------------------------------------------
+
 export const createTicket = async ({
   input,
   userId,
@@ -50,6 +90,10 @@ export const createTicket = async ({
   return ticket;
 };
 
+// ---------------------------------------------
+// Get tickets
+// ---------------------------------------------
+
 export const getTickets = async (
   user: { id: string; role: "user" | "admin" },
   query: TicketQuery
@@ -58,7 +102,8 @@ export const getTickets = async (
 
   const filter: TicketFilter = {};
 
-  // Users see only their own tickets. Admins see all tickets.
+  // Regular users can only see their own tickets.
+  // Admins can see all tickets.
   if (user.role !== "admin") {
     filter.createdBy = user.id;
   }
@@ -78,6 +123,7 @@ export const getTickets = async (
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
+
     TicketModel.countDocuments(filter),
   ]);
 
@@ -94,43 +140,38 @@ export const getTickets = async (
   };
 };
 
+// ---------------------------------------------
+// Get a ticket by ID
+// ---------------------------------------------
+
 export const getTicketById = async (
   ticketId: string,
   user: { id: string; role: "user" | "admin" }
 ) => {
-  if (!mongoose.Types.ObjectId.isValid(ticketId)) {
-    throw new Error("INVALID_TICKET_ID");
-  }
+  validateTicketId(ticketId);
 
-  const ticket = await TicketModel.findById(ticketId);
+  const ticket = await findTicketOrThrow(ticketId);
 
-  if (!ticket) {
-    throw new Error("TICKET_NOT_FOUND");
-  }
-
-  const hasAccess =
-    user.role === "admin" || ticket.createdBy === user.id;
-
-  if (!hasAccess) {
-    throw new Error("TICKET_ACCESS_DENIED");
-  }
+  checkTicketAccess(ticket, user);
 
   return ticket;
 };
+
+// ---------------------------------------------
+// Assign a ticket to an admin
+// ---------------------------------------------
 
 export const assignTicket = async ({
   ticketId,
   userId,
 }: AssignTicketParams) => {
-  if (!mongoose.Types.ObjectId.isValid(ticketId)) {
-    throw new Error("INVALID_TICKET_ID");
+  validateTicketId(ticketId);
+
+  if (!mongoose.isValidObjectId(userId)) {
+    throw new Error("USER_NOT_FOUND");
   }
 
-  const ticket = await TicketModel.findById(ticketId);
-
-  if (!ticket) {
-    throw new Error("TICKET_NOT_FOUND");
-  }
+  const ticket = await findTicketOrThrow(ticketId);
 
   const assignedUser = await getUserById(userId);
 
@@ -145,19 +186,17 @@ export const assignTicket = async ({
   return ticket;
 };
 
+// ---------------------------------------------
+// Update ticket status
+// ---------------------------------------------
+
 export const updateTicketStatus = async ({
   ticketId,
   status,
 }: UpdateTicketStatusParams) => {
-  if (!mongoose.Types.ObjectId.isValid(ticketId)) {
-    throw new Error("INVALID_TICKET_ID");
-  }
+  validateTicketId(ticketId);
 
-  const ticket = await TicketModel.findById(ticketId);
-
-  if (!ticket) {
-    throw new Error("TICKET_NOT_FOUND");
-  }
+  const ticket = await findTicketOrThrow(ticketId);
 
   ticket.status = status;
 
@@ -166,31 +205,24 @@ export const updateTicketStatus = async ({
   return ticket;
 };
 
+// ---------------------------------------------
+// Add a comment
+// ---------------------------------------------
+
 export const addComment = async ({
   ticketId,
   user,
   text,
 }: AddCommentParams) => {
-  if (!mongoose.Types.ObjectId.isValid(ticketId)) {
-    throw new Error("INVALID_TICKET_ID");
-  }
+  validateTicketId(ticketId);
 
-  const ticket = await TicketModel.findById(ticketId);
+  const ticket = await findTicketOrThrow(ticketId);
 
-  if (!ticket) {
-    throw new Error("TICKET_NOT_FOUND");
-  }
-
-  const hasAccess =
-    user.role === "admin" || ticket.createdBy === user.id;
-
-  if (!hasAccess) {
-    throw new Error("TICKET_ACCESS_DENIED");
-  }
+  checkTicketAccess(ticket, user);
 
   ticket.comments.push({
     authorId: user.id,
-    text,
+    text: text.trim(),
     createdAt: new Date(),
   });
 
