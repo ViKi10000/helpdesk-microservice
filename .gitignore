@@ -6,8 +6,8 @@ node_modules/
 .env.*
 !.env.example
 
-# Private keys
-keys/private.pem
+# Generated RSA keys
+keys/*.pem
 
 # Build outputs
 dist/
