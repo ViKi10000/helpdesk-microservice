@@ -141,6 +141,12 @@ npm run dev --workspace=ticket-service
 ```bash
 npm run dev --workspace=frontend
 ```
+## Admin Login
+
+Use the following credentials to log in as admin:
+
+- **Email:** admin@example.com
+- **Password:** Admin@12345
 
 ### 7. Open the application
 
