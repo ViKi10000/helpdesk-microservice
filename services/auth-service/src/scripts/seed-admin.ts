@@ -13,9 +13,7 @@ const seedAdmin = async (): Promise<void> => {
     const mongoUri = process.env.MONGODB_URI;
 
     if (!email || !password) {
-      throw new Error(
-        "ADMIN_EMAIL and ADMIN_PASSWORD are required"
-      );
+      throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are required");
     }
 
     if (!mongoUri) {
@@ -23,10 +21,11 @@ const seedAdmin = async (): Promise<void> => {
     }
 
     await mongoose.connect(mongoUri);
-
     console.log("MongoDB connected");
 
     const existingAdmin = await User.findOne({ email });
+
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     if (existingAdmin) {
       if (existingAdmin.role !== "admin") {
@@ -35,27 +34,32 @@ const seedAdmin = async (): Promise<void> => {
         );
       }
 
-      console.log("Admin already exists");
-      return;
+      existingAdmin.password = hashedPassword;
+      existingAdmin.name = name;
+
+      await existingAdmin.save();
+
+      console.log("Existing admin password updated successfully");
+    } else {
+      const admin = await User.create({
+        name,
+        email,
+        password: hashedPassword,
+        role: "admin",
+      });
+
+      console.log("Admin created successfully");
+
+      console.log({
+        id: admin._id.toString(),
+        name: admin.name,
+        email: admin.email,
+        role: admin.role,
+      });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    const admin = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      role: "admin",
-    });
-
-    console.log("Admin created successfully");
-
-    console.log({
-      id: admin._id.toString(),
-      name: admin.name,
-      email: admin.email,
-      role: admin.role,
-    });
+    console.log("Admin email:", email);
+    console.log("Admin password:", password);
   } catch (error) {
     console.error("Admin seeding failed:", error);
     process.exitCode = 1;
@@ -67,3 +71,4 @@ const seedAdmin = async (): Promise<void> => {
 };
 
 void seedAdmin();
+
