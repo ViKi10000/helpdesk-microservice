@@ -155,7 +155,4 @@ Use the following credentials to log in as admin:
 - Jaeger: http://localhost:16686
 - Prometheus: http://localhost:9090
 
-## AI Tools Used
 
-- **Claude:** Planning, architecture.
-- **ChatGPT:** Code assistance, debugging, and development.
